@@ -89,6 +89,11 @@
   }
   .input-group input:focus { border-color: var(--purple); box-shadow: 0 0 0 4px var(--purple-light); }
   .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 30px; }
+  .btn-blue {
+    background: linear-gradient(135deg, #5b9cf6, #2ec4b6); color: white;
+    box-shadow: 0 4px 14px rgba(91,156,246,0.3);
+  }
+  .btn-blue:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(91,156,246,0.4); }
   .btn-ghost { background: transparent; border: 2px solid var(--border); color: var(--text); box-shadow: none; }
   .btn-ghost:hover { background: var(--bg); border-color: #d4b3f5; box-shadow: none; }
 </style>
@@ -103,7 +108,12 @@
 <div class="container">
   <div class="header-row">
     <h2>🎒 Danh sách chuyến đi</h2>
-    <button class="btn" onclick="openModal()">➕ Thêm chuyến đi</button>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-blue" onclick="exportAll()">⬇️ Xuất tất cả</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('import-file').click()">⬆️ Nhập dữ liệu</button>
+      <input id="import-file" type="file" accept="application/json" style="display:none" onchange="importAll(this.files && this.files[0]); this.value='';">
+      <button class="btn" onclick="openModal()">➕ Thêm chuyến đi</button>
+    </div>
   </div>
   
   <div class="trips-grid" id="trips-grid"></div>
@@ -267,6 +277,70 @@ function saveEditTrip() {
   editingTripId = null;
   closeModal();
   renderTrips();
+}
+
+function exportAll() {
+  const payload = {
+    app: 'trip-planner',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    trips: trips,
+    tripData: {}
+  };
+  trips.forEach(t => {
+    const stateData = localStorage.getItem(`trip-state-${t.id}`);
+    const notesData = localStorage.getItem(`trip-notes-${t.id}`);
+    payload.tripData[t.id] = {
+      state: stateData ? JSON.parse(stateData) : null,
+      notes: notesData || ''
+    };
+  });
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `trip-planner-backup-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function importAll(file) {
+  if (!file) return;
+  if (!confirm('Nhập dữ liệu sẽ ghi đè toàn bộ dữ liệu hiện tại. Tiếp tục?')) return;
+  const reader = new FileReader();
+  reader.onerror = () => alert('Không đọc được file.');
+  reader.onload = () => {
+    try {
+      const json = JSON.parse(reader.result);
+      if (!json || !Array.isArray(json.trips)) {
+        alert('File không đúng định dạng!'); return;
+      }
+      // Clear old trip data
+      trips.forEach(t => {
+        localStorage.removeItem(`trip-state-${t.id}`);
+        localStorage.removeItem(`trip-notes-${t.id}`);
+      });
+      // Restore trips list
+      trips = json.trips;
+      localStorage.setItem(TRIPS_LIST_KEY, JSON.stringify(trips));
+      // Restore each trip's data
+      if (json.tripData && typeof json.tripData === 'object') {
+        Object.keys(json.tripData).forEach(id => {
+          const d = json.tripData[id];
+          if (d.state) localStorage.setItem(`trip-state-${id}`, JSON.stringify(d.state));
+          if (d.notes) localStorage.setItem(`trip-notes-${id}`, d.notes);
+        });
+      }
+      renderTrips();
+      alert('✅ Đã nhập dữ liệu thành công!');
+    } catch (e) {
+      alert('Lỗi khi đọc file: ' + e.message);
+    }
+  };
+  reader.readAsText(file);
 }
 
 loadTrips();
