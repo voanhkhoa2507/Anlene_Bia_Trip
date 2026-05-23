@@ -495,27 +495,79 @@
 const DEFAULT_PLANS = [
   {
     id: 1,
-    name: "Plan A — Bay máy bay ✈️",
-    activities: [
-      { id: 1, name: "Vé máy bay Đà Nẵng → SGN", desc: "Anlene bay vào Sài Gòn", money: 1500000 },
-      { id: 2, name: "Ăn uống 7 ngày", desc: "Bún bò, hủ tiếu, cơm tấm...", money: 3000000 },
-      { id: 3, name: "Di chuyển trong thành phố", desc: "Grab, xe buýt, xe máy", money: 1000000 },
-      { id: 4, name: "Vui chơi giải trí", desc: "Landmark81, cafe, công viên", money: 2000000 },
-      { id: 5, name: "Mua sắm lưu niệm", desc: "Bến Thành, chợ đêm", money: 800000 },
+    name: "Plan A",
+    budgets: [
+      { id: 1, name: "Vé tàu / máy bay", amount: 0 },
+      { id: 2, name: "Homestay", amount: 0 },
+      { id: 3, name: "Ăn uống", amount: 0 },
+      { id: 4, name: "Vui chơi giải trí", amount: 0 },
+      { id: 5, name: "Đi lại & Chi phí khác", amount: 0 },
     ]
   }
 ];
 
+const urlParams = new URLSearchParams(window.location.search);
+const tripId = urlParams.get('id') || 'bia-anlene-saigon';
+
 let state = { fund: { people: [] }, plans: [] };
-const STORAGE_KEY = 'trip-bia-anlene-v2';
+const STORAGE_KEY = `trip-state-${tripId}`;
 let ui = { selectedPlanId: null };
-const NOTES_KEY = 'trip-bia-anlene-notes-v1';
+const NOTES_KEY = `trip-notes-${tripId}`;
 
 function load() {
+  const trips = JSON.parse(localStorage.getItem('trips-list-v1') || '[]');
+  const tripInfo = trips.find(t => t.id === tripId);
+  
+  if (tripInfo) {
+    const emojiEl = document.querySelector('.hero-emoji');
+    const titleEl = document.querySelector('.hero h1');
+    const tagsEl = document.querySelector('.hero-tags');
+    if (emojiEl) emojiEl.textContent = tripInfo.emoji || '🌍';
+    if (titleEl) titleEl.textContent = tripInfo.name || 'My Trip';
+    if (tagsEl) {
+      tagsEl.innerHTML = `
+        <span class="tag">📅 ${tripInfo.days || 1} ngày</span>
+        <span class="tag">🛫 ${tripInfo.route || 'Chưa rõ'}</span>
+      `;
+    }
+    document.title = `${tripInfo.name} 🌍`;
+  }
+
+  const heroEl = document.querySelector('.hero');
+  if (heroEl && !document.getElementById('back-btn')) {
+    const backBtn = document.createElement('a');
+    backBtn.id = 'back-btn';
+    backBtn.href = 'index.html';
+    backBtn.innerHTML = '⬅️ Quay lại';
+    backBtn.style.cssText = 'position:absolute; top:20px; left:20px; color:white; text-decoration:none; font-weight:bold; background:rgba(255,255,255,0.2); padding:6px 12px; border-radius:8px; backdrop-filter:blur(4px); z-index:10;';
+    heroEl.appendChild(backBtn);
+  }
+
+  if (tripId === 'bia-anlene-saigon' && !localStorage.getItem(STORAGE_KEY)) {
+    const oldState = localStorage.getItem('trip-bia-anlene-v2');
+    if (oldState) localStorage.setItem(STORAGE_KEY, oldState);
+    const oldNotes = localStorage.getItem('trip-bia-anlene-notes-v1');
+    if (oldNotes) localStorage.setItem(NOTES_KEY, oldNotes);
+  }
+
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) state = JSON.parse(saved);
   else state.plans = JSON.parse(JSON.stringify(DEFAULT_PLANS));
+  
   ensureStateShape();
+  
+  if (tripInfo && tripInfo.days) {
+    state.plans.forEach(p => {
+      if (!p.days || p.days.length !== tripInfo.days) {
+        const newDays = Array.from({ length: tripInfo.days }, (_, i) => {
+          const oldDay = (p.days || []).find(d => d.day === i + 1);
+          return oldDay || { day: i + 1, items: [] };
+        });
+        p.days = newDays;
+      }
+    });
+  }
+
   renderFund();
   loadNotes();
   renderAllPlans();
@@ -547,7 +599,10 @@ function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 function fmt(n) { return Number(n).toLocaleString('vi-VN') + 'đ'; }
 function parseMoney(s) { return parseInt(String(s).replace(/[^\d]/g,'')) || 0; }
 function emptyDays() {
-  return Array.from({ length: 7 }, (_, i) => ({ day: i + 1, items: [] }));
+  const trips = JSON.parse(localStorage.getItem('trips-list-v1') || '[]');
+  const tripInfo = trips.find(t => t.id === (new URLSearchParams(window.location.search).get('id') || 'bia-anlene-saigon'));
+  const daysCount = tripInfo ? (tripInfo.days || 7) : 7;
+  return Array.from({ length: daysCount }, (_, i) => ({ day: i + 1, items: [] }));
 }
 
 function normBudgetName(s) {
@@ -591,11 +646,11 @@ function ensurePlanShape(plan) {
   }
   if (!Array.isArray(plan.budgets) || !plan.budgets.length) {
     plan.budgets = [
-      { id: 1, name: 'Di chuyển', amount: 0 },
-      { id: 2, name: 'Lưu trú', amount: 0 },
+      { id: 1, name: 'Vé tàu / máy bay', amount: 0 },
+      { id: 2, name: 'Homestay', amount: 0 },
       { id: 3, name: 'Ăn uống', amount: 0 },
-      { id: 4, name: 'Vui chơi', amount: 0 },
-      { id: 5, name: 'Khác', amount: 0 },
+      { id: 4, name: 'Vui chơi giải trí', amount: 0 },
+      { id: 5, name: 'Đi lại & Chi phí khác', amount: 0 },
     ];
   }
   plan.budgets = plan.budgets.map((b, idx) => ({
@@ -605,8 +660,13 @@ function ensurePlanShape(plan) {
   }));
 
   // Days items (phát sinh theo ngày)
-  if (!Array.isArray(plan.days) || plan.days.length !== 7) {
-    plan.days = emptyDays();
+  const targetDaysCount = emptyDays().length;
+  if (!Array.isArray(plan.days) || plan.days.length !== targetDaysCount) {
+    const oldDays = Array.isArray(plan.days) ? plan.days : [];
+    plan.days = Array.from({ length: targetDaysCount }, (_, i) => {
+      const existing = oldDays.find(d => d.day === i + 1);
+      return existing || { day: i + 1, items: [] };
+    });
   } else {
     // migrate old {eat/play} format if exists
     const looksOld = plan.days.some(d => d && (typeof d.eat === 'string' || typeof d.play === 'string' || 'eatMoney' in d || 'playMoney' in d));
@@ -987,10 +1047,19 @@ function dayNonHomestayTotal(plan, day) {
   return (day.items || []).reduce((s, it) => s + (homestayIds.has(it.budgetId) ? 0 : (Number(it.money) || 0)), 0);
 }
 
-const TRIP_START_DAY = 6;
-const TRIP_START_MONTH = 5;
-function tripDateLabel(dayIdx) {
-  return `${TRIP_START_DAY + dayIdx}/${TRIP_START_MONTH}`;
+function tripDateLabel(plan, dayIdx) {
+  const dateLabels = plan?.dateLabels || [];
+  if (dateLabels[dayIdx]) return dateLabels[dayIdx];
+  return `Ngày ${dayIdx + 1}`;
+}
+
+function updateDayLabel(planId, dayIdx, val) {
+  const plan = state.plans.find(p => p.id === planId);
+  if (!plan) return;
+  if (!Array.isArray(plan.dateLabels)) plan.dateLabels = [];
+  while (plan.dateLabels.length <= dayIdx) plan.dateLabels.push('');
+  plan.dateLabels[dayIdx] = val;
+  save();
 }
 
 function dayCardHTML(plan, day) {
@@ -1018,9 +1087,12 @@ function dayCardHTML(plan, day) {
     `;
   }).join('');
 
+  const currentLabel = tripDateLabel(plan, dayIdx);
   return `
     <div class="day-card">
-      <div class="day-title">📅 Ngày ${tripDateLabel(dayIdx)}</div>
+      <div class="day-title" style="display:flex;align-items:center;gap:8px;">
+        📅 <input class="act-input" value="${esc(currentLabel)}" placeholder="VD: 6/5 hoặc Ngày 1" style="font-weight:900;font-size:14px;padding:4px 8px;max-width:160px;" onchange="updateDayLabel(${plan.id},${dayIdx},this.value)">
+      </div>
       ${itemsHTML || `<div style="color:var(--muted);font-weight:700;margin-bottom:10px;">Chưa có phát sinh.</div>`}
 
       <div class="day-section">
@@ -1041,7 +1113,7 @@ function dayCardHTML(plan, day) {
       </div>
 
       <div class="day-total">
-        <span>Tổng ngày ${tripDateLabel(dayIdx)}</span>
+        <span>Tổng ngày ${dayIdx + 1}</span>
         <span id="day-total-${plan.id}-${dayIdx}" class="day-total-money ${isBad ? 'bad' : 'good'}">${fmt(total)}</span>
       </div>
       <div class="day-total-sub">
@@ -1293,7 +1365,6 @@ function renderPlanDetail(planId) {
       <div class="detail-top">
         <div>
           <div class="detail-title">📌 Chi tiết: ${esc(plan.name)}</div>
-          <div class="detail-sub">Mỗi ngày ăn và chơi khoảng 500.000 nhoa</div>
         </div>
         <div class="detail-actions">
           <button class="btn btn-ghost btn-sm" onclick="closePlanDetail()">← Quay lại</button>
@@ -1351,11 +1422,11 @@ function addPlan() {
   const templateBudgets = Array.isArray(templatePlan?.budgets) && templatePlan.budgets.length
     ? templatePlan.budgets
     : [
-        { id: 1, name: 'Di chuyển', amount: 0 },
-        { id: 2, name: 'Lưu trú', amount: 0 },
+        { id: 1, name: 'Vé tàu / máy bay', amount: 0 },
+        { id: 2, name: 'Homestay', amount: 0 },
         { id: 3, name: 'Ăn uống', amount: 0 },
-        { id: 4, name: 'Vui chơi', amount: 0 },
-        { id: 5, name: 'Khác', amount: 0 },
+        { id: 4, name: 'Vui chơi giải trí', amount: 0 },
+        { id: 5, name: 'Đi lại & Chi phí khác', amount: 0 },
       ];
 
   state.plans.push({
